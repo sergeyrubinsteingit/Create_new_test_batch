@@ -56,10 +56,12 @@ dotnet add "%CSPROJ%" package NUnitLite --version 4.4.0 || ( echo [ERROR] Failed
 
 :: ===== Add other packages =====
 echo Adding other packages...
+dotnet add "%CSPROJ%" package OpenQA.Selenium
 dotnet add "%CSPROJ%" package Dapper
 dotnet add "%CSPROJ%" package System.Data.SqlClient
 dotnet add "%CSPROJ%" package Twilio
 dotnet add "%CSPROJ%" package Google.Apis.Gmail.v1
+dotnet add "%CSPROJ%" package Microsoft.Office.Interop.Outlook
 
 :: ===== Make project an EXE (OutputType) — single safe PowerShell replace =====
 echo Converting project to EXE OutputType...
@@ -77,17 +79,17 @@ if errorlevel 1 (
   exit /b 1
 )
 
-:: ===== Create TestProcedure.cs (NUnitLite runner) — one-line PowerShell (no ^) =====
-echo Creating TestProcedure.cs with NUnitLite runner...
+:: ===== Create TestProcedure.cs — one-line PowerShell (no ^) =====
+echo Creating TestProcedure.cs...
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^ "$lines = @('using NUnitLite;','','class TestProcedure','{','    public static int Main(string[] args)','    {','        return new AutoRun().Execute(args);','    }','}'); Set-Content -Path 'TestProcedure.cs' -Value $lines -Encoding UTF8"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^ "$lines = @(   'using System;','using System.Net.Http;','using System.Net.Http.Headers;','using System.Text;','using System.Text.Json;','using System.Threading;','using System.Threading.Tasks;','','','public class TestProcedure','{','    private readonly HttpClient _http;','    private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);','    private string? _token;','','    // Normal instance constructor with parameter','    public TestProcedure(HttpClient? httpClient = null)','    {','        _http = httpClient ?? new HttpClient { BaseAddress = new Uri(\"https://qa-cortex.nayax.com/\") };','    }','','    public static async Task Main(string[] args)','    {','        var proc = new TestProcedure();   // Instantiate','        await proc.RunAsync();','    }','','    public async Task RunAsync()','    {','        try','        {','            string token = await SignIn(\"sergeyr\", \"rubi69qa1******\");','            Console.WriteLine($\"Received token: {token}\");','        }','        catch (Exception ex)','        {','            Console.WriteLine($\"Sign-in failed: {ex.Message}\");','        }','','        try','        {','            if (string.IsNullOrEmpty(_token))','            {','				throw new Exception(\"Token is null, test is aborted.\"); ','            }','            else ','			{','                string token = await NextTestStep(_token);','                Console.WriteLine($\"Received token: {token}\");			','            }','        }','        catch (Exception ex)','        {','            Console.WriteLine($\"Function failed: {ex.Message}\");','        }','','        _http.Dispose();','    }','','    public async Task<string> SignIn(string username, string password, CancellationToken ct = default)','    {','        var url = \"users/v1/signin\";','        var payload = new { username, password };','        var body = new StringContent(JsonSerializer.Serialize(payload, _json), Encoding.UTF8, \"application/json\");','','        using var rsp = await _http.PostAsync(url, body, ct).ConfigureAwait(false);','        rsp.EnsureSuccessStatusCode();','','        var json = await rsp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);','        using var doc = JsonDocument.Parse(json);','        var tokenProp = doc.RootElement.GetProperty(\"token\");','','        _token = tokenProp.GetString();','        if (string.IsNullOrEmpty(_token))','            throw new InvalidOperationException(\"Token not found in sign-in response.\");','','        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(\"Bearer\", _token);','        return _token;','    }','','    public async Task<string> NextTestStep(string token)','    {','        EnsureSignedIn();','        Console.WriteLine($\"Sign in token: {token}\");','        return token;','    }','','    private void EnsureSignedIn()','    {','        if (string.IsNullOrWhiteSpace(_token))','            throw new InvalidOperationException(\"Not signed in. Call SignIn first.\");','    }','}'   ); Set-Content -Path 'TestProcedure.cs' -Value $lines -Encoding UTF8"
 
 if errorlevel 1 ( echo [ERROR] Failed to create TestProcedure.cs & exit /b 1 )
 
 :: ===== Create Tests.cs (sample test) — one-line PowerShell (no ^) =====
 echo Creating Tests.cs sample test...
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^ "$lines = @('using NUnit.Framework;','','public class Tests','{','    [Test]','    public void Sanity()','    {','    Assert.Pass(\"Sanity OK\");','    }','}'); Set-Content -Path 'Tests.cs' -Value $lines -Encoding UTF8"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^ "$lines = @('using NUnit.Framework;','using System.Net.Http;', 'using System.Net.Http.Headers;', 'using System.Text;', 'using System.Text.Json;','', 'public sealed class LoginRequest', '{', '    public string Username { get; set; } = \"\";', '    public string Password { get; set; } = \"\";', '}', '','public class Tests','{', '    [Test]','    public void SignIn()','    {','    Assert.Pass(\"Sanity OK\");','    }','}'); Set-Content -Path 'Tests.cs' -Value $lines -Encoding UTF8"
 
 if errorlevel 1 ( echo [ERROR] Failed to create Tests.cs & exit /b 1 )
 
@@ -101,11 +103,13 @@ if errorlevel 1 ( echo [ERROR] Build failed.& exit /b 1 )
 
 echo.
 echo Setup complete.
-echo Project location: %FULL_PROJECT_PATH%
+
 :: ===== Go to project directory =====
+echo Project location: %FULL_PROJECT_PATH%
 cd %FULL_PROJECT_PATH%
+
 :: ===== Open the project =====
-dotnet run
+dotnet run --project "%FULL_PROJECT_PATH%\%PROJECT_NAME%.csproj" %*
 echo.
 echo To list tests: dotnet run -- --explore
 echo To run all: dotnet run
