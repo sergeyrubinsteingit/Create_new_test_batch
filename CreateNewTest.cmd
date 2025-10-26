@@ -57,8 +57,12 @@ dotnet add "%CSPROJ%" package NUnitLite --version 4.4.0 || ( echo [ERROR] Failed
 :: ===== Add other packages =====
 echo Adding other packages...
 dotnet add "%CSPROJ%" package OpenQA.Selenium
+dotnet add "%CSPROJ%" package OpenQA.Selenium.Chrome
+dotnet add "%CSPROJ%" package Selenium.WebDriver
+dotnet add "%CSPROJ%" package Selenium.Support
 dotnet add "%CSPROJ%" package Dapper
-dotnet add "%CSPROJ%" package System.Data.SqlClient
+rem dotnet add "%CSPROJ%" package System.Data.SqlClient
+dotnet add "%CSPROJ%" package Microsoft.Data.SqlClient
 dotnet add "%CSPROJ%" package Twilio
 dotnet add "%CSPROJ%" package Google.Apis.Gmail.v1
 dotnet add "%CSPROJ%" package Microsoft.Office.Interop.Outlook
@@ -68,9 +72,9 @@ echo Converting project to EXE OutputType...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$p = Get-Content '%CSPROJ%' -Raw;" ^
   "if ($p -notmatch '<StartupObject>') {" ^
-  "  $p = $p -replace '</Project>', '<PropertyGroup><StartupObject>TestProcedure</StartupObject></PropertyGroup></Project>';" ^
+  "  $p = $p -replace '</Project>', '<PropertyGroup><StartupObject>MainClass</StartupObject></PropertyGroup></Project>';" ^
   "} else {" ^
-  "  $p = $p -replace '<StartupObject>.*?</StartupObject>', '<StartupObject>TestProcedure</StartupObject>';" ^
+  "  $p = $p -replace '<StartupObject>.*?</StartupObject>', '<StartupObject>MainClass</StartupObject>';" ^
   "}" ^
   "Set-Content '%CSPROJ%' -Value $p -Encoding UTF8"
 
@@ -79,19 +83,265 @@ if errorlevel 1 (
   exit /b 1
 )
 
-:: ===== Create TestProcedure.cs — one-line PowerShell (no ^) =====
-echo Creating TestProcedure.cs...
+:: ===== Create MainClass.cs =====
+echo Creating MainClass.cs sample test...
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^ "$lines = @(   'using System;','using System.Net.Http;','using System.Net.Http.Headers;','using System.Text;','using System.Text.Json;','using System.Threading;','using System.Threading.Tasks;','','','public class TestProcedure','{','    private readonly HttpClient _http;','    private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);','    private string? _token;','','    // Normal instance constructor with parameter','    public TestProcedure(HttpClient? httpClient = null)','    {','        _http = httpClient ?? new HttpClient { BaseAddress = new Uri(\"https://qa-cortex.nayax.com/\") };','    }','','    public static async Task Main(string[] args)','    {','        var _procedure = new TestProcedure();   // Instantiate','        await _procedure.RunAsync();','    }','','    public async Task RunAsync()','    {','        // Token check-in','        try','        {','            string token = await SignIn(\"sergeyr\", \"rubi69qa1******\");','            Console.WriteLine($\"Received token in Sign in: {token}\");','        }','        catch (Exception ex)','        {','            throw new Exception($\"Sign-in failed, test is aborted:\n{ex.Message}\");','        }','','        // Test 1:','        try','        {','            if (string.IsNullOrEmpty(_token))','            {','				throw new Exception(\"Token is null, test is aborted.\"); ','            }','            else ','			{','                string token = await NextTestStep(_token);','            }','        }','        catch (Exception ex)','        {','            Console.WriteLine($\"Function failed: {ex.Message}\");','        }','','        _http.Dispose();','    }','','    // Sign-in at start of the flow','    public async Task<string> SignIn(string username, string password, CancellationToken cancelToken = default)','    {','        var url = \"users/v1/signin\";','        var payload = new { username, password };','        var body = new StringContent(JsonSerializer.Serialize(payload, _json), Encoding.UTF8, \"application/json\");','','        using var rsp = await _http.PostAsync(url, body, cancelToken).ConfigureAwait(false);','        rsp.EnsureSuccessStatusCode();','','        var json = await rsp.Content.ReadAsStringAsync(cancelToken).ConfigureAwait(false);','        using var doc = JsonDocument.Parse(json);','        var tokenProp = doc.RootElement.GetProperty(\"token\");','','        _token = tokenProp.GetString();','','        if (string.IsNullOrEmpty(_token))','            throw new InvalidOperationException(\"Token not found in sign-in response.\");','','        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(\"Bearer\", _token);','        return _token;','    }','','    // Test 1','    public async Task<string> NextTestStep(string token)','    {','        // If the token OK?','        await EnsureSignedIn(token);','        Console.WriteLine($\"Received token in the Next Test Step:\n{token}\");','        return token;','    }','','    // Sign-in check in before running the next step','    private async Task<string> EnsureSignedIn(string controlToken)','    {','        _token = controlToken;','        if (string.IsNullOrWhiteSpace(_token))','            throw new InvalidOperationException(\"Not signed in. Call SignIn first.\");','        return _token;','    }','}'   ); Set-Content -Path 'TestProcedure.cs' -Value $lines -Encoding UTF8"
+> "__mk_main.ps1" echo $content = @'
+>> "__mk_main.ps1" echo using System.Text.Json;
+>> "__mk_main.ps1" echo using HttpClient = System.Net.Http.HttpClient;
+>> "__mk_main.ps1" echo //
+>> "__mk_main.ps1" echo public class MainClass
+>> "__mk_main.ps1" echo {
+>> "__mk_main.ps1" echo     private readonly HttpClient _http;
+>> "__mk_main.ps1" echo     private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
+>> "__mk_main.ps1" echo     public string? _token;
+>> "__mk_main.ps1" echo     private readonly SignIn _signIn;
+>> "__mk_main.ps1" echo     private Test1 _test1;
+>> "__mk_main.ps1" echo //
+>> "__mk_main.ps1" echo     // Normal instance constructor with parameter
+>> "__mk_main.ps1" echo     public MainClass(HttpClient? httpClient = null)
+>> "__mk_main.ps1" echo     {
+>> "__mk_main.ps1" echo         _http = httpClient ?? new HttpClient { BaseAddress = new Uri("https://qa-cortex.nayax.com/") };
+>> "__mk_main.ps1" echo         _signIn = new SignIn(_http, _json);
+>> "__mk_main.ps1" echo         _test1 = new Test1(_http);
+>> "__mk_main.ps1" echo     }
+>> "__mk_main.ps1" echo //
+>> "__mk_main.ps1" echo     public static async Task Main(string[] args)
+>> "__mk_main.ps1" echo     {
+>> "__mk_main.ps1" echo         var _procedure = new MainClass();   // Instantiate
+>> "__mk_main.ps1" echo         await _procedure.RunAsync();
+>> "__mk_main.ps1" echo     }
+>> "__mk_main.ps1" echo //
+>> "__mk_main.ps1" echo     public async Task RunAsync()
+>> "__mk_main.ps1" echo     {
+>> "__mk_main.ps1" echo         // Token check-in
+>> "__mk_main.ps1" echo         try
+>> "__mk_main.ps1" echo         {
+>> "__mk_main.ps1" echo             _token = await _signIn.LogIn("sergeyr", "rubi69qa2******");
+>> "__mk_main.ps1" echo             Console.WriteLine($"Received token in Sign in: {_token}");
+>> "__mk_main.ps1" echo         }
+>> "__mk_main.ps1" echo         catch (Exception ex)
+>> "__mk_main.ps1" echo         {
+>> "__mk_main.ps1" echo             throw new Exception($"Sign-in failed, test is aborted:\n{ex.Message}");
+>> "__mk_main.ps1" echo         }
+>> "__mk_main.ps1" echo         // Test 1:
+>> "__mk_main.ps1" echo         try
+>> "__mk_main.ps1" echo         {
+>> "__mk_main.ps1" echo             if (string.IsNullOrEmpty(_token))
+>> "__mk_main.ps1" echo             {
+>> "__mk_main.ps1" echo 				throw new Exception("Token is null, test is aborted."); 
+>> "__mk_main.ps1" echo             }
+>> "__mk_main.ps1" echo             else 
+>> "__mk_main.ps1" echo 			{
+>> "__mk_main.ps1" echo                 string token = await _test1.NextTestStep(_token);
+>> "__mk_main.ps1" echo             }
+>> "__mk_main.ps1" echo         }
+>> "__mk_main.ps1" echo         catch (Exception ex)
+>> "__mk_main.ps1" echo         {
+>> "__mk_main.ps1" echo             Console.WriteLine($"Function failed: {ex.Message}");
+>> "__mk_main.ps1" echo         }
+>> "__mk_main.ps1" echo         _http.Dispose();
+>> "__mk_main.ps1" echo     }
+>> "__mk_main.ps1" echo }
+>> "__mk_main.ps1" echo '@
+>> "__mk_main.ps1" echo Set-Content -Path 'MainClass.cs' -Value $content -Encoding UTF8
 
-if errorlevel 1 ( echo [ERROR] Failed to create TestProcedure.cs & exit /b 1 )
+powershell -NoProfile -ExecutionPolicy Bypass -File "__mk_main.ps1"
+if errorlevel 1 ( echo [ERROR] Failed to create MainClass.cs & exit /b 1 )
+del "__mk_main.ps1"
 
-:: ===== Create Tests.cs (sample test) — one-line PowerShell (no ^) =====
-echo Creating Tests.cs sample test...
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^ "$lines = @('using NUnit.Framework;','using System.Net.Http;', 'using System.Net.Http.Headers;', 'using System.Text;', 'using System.Text.Json;','', 'public sealed class LoginRequest', '{', '    public string Username { get; set; } = \"\";', '    public string Password { get; set; } = \"\";', '}', '','public class Tests','{', '    [Test]','    public void SignIn()','    {','    Assert.Pass(\"Sanity OK\");','    }','}'); Set-Content -Path 'Tests.cs' -Value $lines -Encoding UTF8"
+:: ===== Create SignIn.cs  =====
+echo Creating SignIn.cs sample test...
 
-if errorlevel 1 ( echo [ERROR] Failed to create Tests.cs & exit /b 1 )
+> "__mk_signin.ps1" echo $content = @'
+>> "__mk_signin.ps1" echo using NUnit.Framework;
+>> "__mk_signin.ps1" echo using System.Net.Http;
+>> "__mk_signin.ps1" echo using System.Net.Http.Headers;
+>> "__mk_signin.ps1" echo using System.Text;
+>> "__mk_signin.ps1" echo using System.Text.Json;
+>> "__mk_signin.ps1" echo using static System.Net.WebRequestMethods;
+>> "__mk_signin.ps1" echo //
+>> "__mk_signin.ps1" echo public class SignIn
+>> "__mk_signin.ps1" echo {
+>> "__mk_signin.ps1" echo     private readonly HttpClient _httpClient;
+>> "__mk_signin.ps1" echo     private readonly JsonSerializerOptions _jsonOps;
+>> "__mk_signin.ps1" echo //
+>> "__mk_signin.ps1" echo     public SignIn(HttpClient httpClient, JsonSerializerOptions jsonOps) 
+>> "__mk_signin.ps1" echo     {
+>> "__mk_signin.ps1" echo         _httpClient = httpClient;
+>> "__mk_signin.ps1" echo         _jsonOps = jsonOps;
+>> "__mk_signin.ps1" echo     }
+>> "__mk_signin.ps1" echo     // Sign-in at start of the flow
+>> "__mk_signin.ps1" echo     public async Task^<string^> LogIn(string username, string password, CancellationToken cancelToken = default)
+>> "__mk_signin.ps1" echo     {
+>> "__mk_signin.ps1" echo         var url = "users/v1/signin";
+>> "__mk_signin.ps1" echo         var payload = new { username, password };
+>> "__mk_signin.ps1" echo         var body = new StringContent(JsonSerializer.Serialize(payload, _jsonOps), Encoding.UTF8, "application/json");
+>> "__mk_signin.ps1" echo //
+>> "__mk_signin.ps1" echo         using var _responsele = await _httpClient.PostAsync(url, body, cancelToken).ConfigureAwait(false);
+>> "__mk_signin.ps1" echo         _responsele.EnsureSuccessStatusCode();
+>> "__mk_signin.ps1" echo //
+>> "__mk_signin.ps1" echo         var json = await _responsele.Content.ReadAsStringAsync(cancelToken).ConfigureAwait(false);
+>> "__mk_signin.ps1" echo         using var doc = JsonDocument.Parse(json);
+>> "__mk_signin.ps1" echo         var tokenProp = doc.RootElement.GetProperty("token");
+>> "__mk_signin.ps1" echo         var _token = tokenProp.GetString();
+>> "__mk_signin.ps1" echo //
+>> "__mk_signin.ps1" echo         if (string.IsNullOrEmpty(_token))
+>> "__mk_signin.ps1" echo             throw new InvalidOperationException("Token not found in sign-in response.");
+>> "__mk_signin.ps1" echo //
+>> "__mk_signin.ps1" echo         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+>> "__mk_signin.ps1" echo         return _token;
+>> "__mk_signin.ps1" echo     }
+>> "__mk_signin.ps1" echo }
+>> "__mk_signin.ps1" echo '@
+>> "__mk_signin.ps1" echo Set-Content -Path 'SignIn.cs' -Value $content -Encoding UTF8
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "__mk_signin.ps1"
+if errorlevel 1 ( echo [ERROR] Failed to create SignIn.cs & exit /b 1 )
+del "__mk_signin.ps1"
+
+
+:: ===== Create Test1.cs  =====
+echo Creating Test1.cs sample test...
+
+> "__mk_test1.ps1" echo $content = @'
+>> "__mk_test1.ps1" echo public class Test1
+>> "__mk_test1.ps1" echo {
+>> "__mk_test1.ps1" echo     private readonly HttpClient _client;
+>> "__mk_test1.ps1" echo     public Test1 (HttpClient httpClient) 
+>> "__mk_test1.ps1" echo     {
+>> "__mk_test1.ps1" echo         _client = httpClient;
+>> "__mk_test1.ps1" echo     }
+>> "__mk_test1.ps1" echo     // Test 1
+>> "__mk_test1.ps1" echo     public async Task^<string^> NextTestStep(string token)
+>> "__mk_test1.ps1" echo     {
+>> "__mk_test1.ps1" echo         // If the token OK?
+>> "__mk_test1.ps1" echo         await Task.Run(() =^>
+>> "__mk_test1.ps1" echo         {
+>> "__mk_test1.ps1" echo             if (string.IsNullOrWhiteSpace(token))
+>> "__mk_test1.ps1" echo                 throw new InvalidOperationException("Token is null/empty. Call SignIn first.");
+>> "__mk_test1.ps1" echo         });
+>> "__mk_test1.ps1" echo         Console.WriteLine($"Received token in the Next Test Step:\n{token}");
+>> "__mk_test1.ps1" echo         return token;
+>> "__mk_test1.ps1" echo     }
+>> "__mk_test1.ps1" echo }
+>> "__mk_test1.ps1" echo '@
+>> "__mk_test1.ps1" echo Set-Content -Path 'Test1.cs' -Value $content -Encoding UTF8
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "__mk_test1.ps1"
+if errorlevel 1 ( echo [ERROR] Failed to create Test1.cs & exit /b 1 )
+del "__mk_test1.ps1"
+
+:: ===== Create WebDriverSettings.cs  =====
+echo Creating WebDriverSettings.cs sample test...
+
+> "__mk_webdriver.ps1" echo $content = @'
+>> "__mk_webdriver.ps1" echo using OpenQA.Selenium;
+>> "__mk_webdriver.ps1" echo using OpenQA.Selenium.Chrome;
+>> "__mk_webdriver.ps1" echo using Microsoft.Data.SqlClient;
+>> "__mk_webdriver.ps1" echo using System;
+>> "__mk_webdriver.ps1" echo //
+>> "__mk_webdriver.ps1" echo namespace Test.GlobalClasses
+>> "__mk_webdriver.ps1" echo {
+>> "__mk_webdriver.ps1" echo     public class WebDriverSettings
+>> "__mk_webdriver.ps1" echo     {
+>> "__mk_webdriver.ps1" echo         private static IWebDriver _webDriver;
+>> "__mk_webdriver.ps1" echo         private static readonly object _lockObject = new object();
+>> "__mk_webdriver.ps1" echo //
+>> "__mk_webdriver.ps1" echo         public static IWebDriver WebDriver
+>> "__mk_webdriver.ps1" echo         {
+>> "__mk_webdriver.ps1" echo             get
+>> "__mk_webdriver.ps1" echo             { 
+>> "__mk_webdriver.ps1" echo                 if (_webDriver == null)
+>> "__mk_webdriver.ps1" echo                 {
+>> "__mk_webdriver.ps1" echo                     lock (_lockObject)
+>> "__mk_webdriver.ps1" echo                     {
+>> "__mk_webdriver.ps1" echo                         if (_webDriver == null)
+>> "__mk_webdriver.ps1" echo                         {
+>> "__mk_webdriver.ps1" echo                             _webDriver = new ChromeDriver();
+>> "__mk_webdriver.ps1" echo                             _webDriver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(10);
+>> "__mk_webdriver.ps1" echo                         }
+>> "__mk_webdriver.ps1" echo                     }
+>> "__mk_webdriver.ps1" echo                 }
+>> "__mk_webdriver.ps1" echo                 return _webDriver;
+>> "__mk_webdriver.ps1" echo             } //get
+>> "__mk_webdriver.ps1" echo         }
+>> "__mk_webdriver.ps1" echo //
+>> "__mk_webdriver.ps1" echo         public static void DisposeWebDriver()
+>> "__mk_webdriver.ps1" echo         {
+>> "__mk_webdriver.ps1" echo             _webDriver?.Quit();
+>> "__mk_webdriver.ps1" echo             _webDriver = null;
+>> "__mk_webdriver.ps1" echo         }
+>> "__mk_webdriver.ps1" echo     }
+>> "__mk_webdriver.ps1" echo }
+>> "__mk_webdriver.ps1" echo '@
+>> "__mk_webdriver.ps1" echo Set-Content -Path 'WebDriverSettings.cs' -Value $content -Encoding UTF8
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "__mk_webdriver.ps1"
+if errorlevel 1 ( echo [ERROR] Failed to create WebDriverSettings.cs & exit /b 1 )
+del "__mk_webdriver.ps1"
+
+:: ===== Create SqlOperations.cs — temp PS1, column-1 here-string =====
+echo Creating SqlOperations.cs...
+
+> "__mk_sqlops.ps1" echo $content = @'
+>> "__mk_sqlops.ps1" echo using Microsoft.Data.SqlClient;
+>> "__mk_sqlops.ps1" echo //
+>> "__mk_sqlops.ps1" echo namespace SqlOperations
+>> "__mk_sqlops.ps1" echo {
+>> "__mk_sqlops.ps1" echo     class DbData
+>> "__mk_sqlops.ps1" echo     {
+>> "__mk_sqlops.ps1" echo         private readonly string ConnectionToDBA = "Server=qa2ilsql01;Database=DCS;Integrated Security=True";
+>> "__mk_sqlops.ps1" echo //
+>> "__mk_sqlops.ps1" echo         public async Task^<int^> DeleteFromDB()
+>> "__mk_sqlops.ps1" echo         {
+>> "__mk_sqlops.ps1" echo             string query = @"
+>> "__mk_sqlops.ps1" echo USE DCS_SVC_SCHEDULING;
+>> "__mk_sqlops.ps1" echo DECLARE @EntityId    BIGINT = 000000000;
+>> "__mk_sqlops.ps1" echo DECLARE @CountBefore INT, @DeletedRows INT;
+>> "__mk_sqlops.ps1" echo BEGIN TRAN delete_tasks;
+>> "__mk_sqlops.ps1" echo SELECT @CountBefore = COUNT(*)
+>> "__mk_sqlops.ps1" echo FROM dbo.TBL_NAME WITH (UPDLOCK, HOLDLOCK)
+>> "__mk_sqlops.ps1" echo WHERE col_name = @EntityId;
+>> "__mk_sqlops.ps1" echo DELETE dbo.TBL_NAME
+>> "__mk_sqlops.ps1" echo WHERE col_name = @EntityId;
+>> "__mk_sqlops.ps1" echo SET @DeletedRows = @@ROWCOUNT;
+>> "__mk_sqlops.ps1" echo IF (@DeletedRows ^> @CountBefore)
+>> "__mk_sqlops.ps1" echo BEGIN
+>> "__mk_sqlops.ps1" echo     ROLLBACK TRAN delete_tasks;
+>> "__mk_sqlops.ps1" echo     RAISERROR('Too many records to delete. Count=%%%d, Deleted=%%%d', 16, 1, @CountBefore, @DeletedRows);
+>> "__mk_sqlops.ps1" echo END
+>> "__mk_sqlops.ps1" echo ELSE
+>> "__mk_sqlops.ps1" echo BEGIN
+>> "__mk_sqlops.ps1" echo     COMMIT TRAN delete_tasks;
+>> "__mk_sqlops.ps1" echo     PRINT CAST(@DeletedRows AS VARCHAR(33)) + ' record(s) have been deleted.';
+>> "__mk_sqlops.ps1" echo END";
+>> "__mk_sqlops.ps1" echo             using (SqlConnection conn = new SqlConnection(ConnectionToDBA))
+>> "__mk_sqlops.ps1" echo             {
+>> "__mk_sqlops.ps1" echo                 try { await conn.OpenAsync(); }
+>> "__mk_sqlops.ps1" echo                 catch (SqlException ex)
+>> "__mk_sqlops.ps1" echo                 {
+>> "__mk_sqlops.ps1" echo                     Console.WriteLine($"SQL Exception: {ex.Message}");
+>> "__mk_sqlops.ps1" echo                     return -1;
+>> "__mk_sqlops.ps1" echo                 }
+>> "__mk_sqlops.ps1" echo                 using (SqlCommand cmd = new SqlCommand(query, conn))
+>> "__mk_sqlops.ps1" echo                 {
+>> "__mk_sqlops.ps1" echo                     int rowsAffected = await cmd.ExecuteNonQueryAsync();
+>> "__mk_sqlops.ps1" echo                     Console.WriteLine($"Rows affected (pre-test cleanup): {rowsAffected}");
+>> "__mk_sqlops.ps1" echo                     return rowsAffected;
+>> "__mk_sqlops.ps1" echo                 }
+>> "__mk_sqlops.ps1" echo             }
+>> "__mk_sqlops.ps1" echo         }
+>> "__mk_sqlops.ps1" echo     }
+>> "__mk_sqlops.ps1" echo }
+>> "__mk_sqlops.ps1" echo '@
+>> "__mk_sqlops.ps1" echo Set-Content -Path 'SqlOperations.cs' -Value $content -Encoding UTF8
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "__mk_sqlops.ps1"
+if errorlevel 1 ( echo [ERROR] Failed to create SqlOperations.cs & exit /b 1 )
+del "__mk_sqlops.ps1"
+
 
 echo Files created:
 dir /b *.cs
