@@ -14,8 +14,9 @@ if errorlevel 1 (
 
 
 :: ===== Ask for base path =====
-set /p BASE_PATH=Enter the full path where you want to create a new directory (default C:\Users\sergeyr\WEB_QA_TESTS): 
-if "%BASE_PATH%"=="" set "BASE_PATH=C:\Users\sergeyr\WEB_QA_TESTS"
+set "DEFAULT_PATH=C:\Users\sergeyr\WEB_QA_TESTS"
+set /p BASE_PATH=Enter the full path where you want to create a new directory (default %DEFAULT_PATH%): 
+if "%BASE_PATH%"=="" set "BASE_PATH=%DEFAULT_PATH%"
 
 
 
